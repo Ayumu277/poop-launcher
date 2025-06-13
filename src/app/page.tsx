@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { translations, Language } from './translations'
 
-type GameState = 'ready' | 'playing' | 'flying' | 'wine-monkey' | 'sapphire-duo' | 'ruby-monkey' | 'diamond-monkey' | 'result'
+type GameState = 'ready' | 'playing' | 'flying' | 'wine-monkey' | 'sapphire-duo' | 'ruby-monkey' | 'golden-monkey' | 'diamond-monkey' | 'result'
 
 interface PoopState {
   angle: number
@@ -50,6 +50,8 @@ export default function Home() {
   const [rubyMonkeyQuote, setRubyMonkeyQuote] = useState<string>('')
   const diamondMonkeyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [diamondMonkeyQuote, setDiamondMonkeyQuote] = useState<string>('')
+  const goldenMonkeyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [goldenMonkeyQuote, setGoldenMonkeyQuote] = useState<string>('')
   const sapphireDuoTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const [sapphireDuoQuote, setSapphireDuoQuote] = useState<string>('')
   const [isMuted, setIsMuted] = useState<boolean>(false)
@@ -58,6 +60,7 @@ export default function Home() {
   const [isPortrait, setIsPortrait] = useState<boolean>(false)
   const wineMonkeyAnimationRef = useRef<number>(0)
   const sapphireDuoAnimationRef = useRef<number>(0)
+  const goldenMonkeyAnimationRef = useRef<number>(0)
 
   const poopARef = useRef<PoopState>({
     angle: 0,
@@ -133,6 +136,9 @@ export default function Home() {
       }
       if (diamondMonkeyTimeoutRef.current) {
         clearTimeout(diamondMonkeyTimeoutRef.current)
+      }
+      if (goldenMonkeyTimeoutRef.current) {
+        clearTimeout(goldenMonkeyTimeoutRef.current)
       }
     }
   }, [])
@@ -235,6 +241,30 @@ export default function Home() {
       }, 5000)
   }
 
+  const triggerGoldenMonkeyScene = () => {
+    const quotes = tArray('goldenMonkeyLines')
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
+    setGoldenMonkeyQuote(randomQuote)
+
+    // Lower background music volume (only if not muted)
+    if (audioRef.current && !isMuted) {
+      audioRef.current.volume = 0.2
+    }
+
+    setGameState('golden-monkey')
+    goldenMonkeyAnimationRef.current = 0 // Reset animation
+
+    // Return to result after 6 seconds
+    goldenMonkeyTimeoutRef.current = setTimeout(() => {
+      // Restore background music volume (only if not muted)
+      if (audioRef.current && !isMuted) {
+        audioRef.current.volume = 0.5
+      }
+      setGameState('result')
+      setGoldenMonkeyQuote('')
+    }, 6000)
+  }
+
   const triggerDiamondMonkeyScene = () => {
     const quotes = tArray('diamondMonkeyLines')
     const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
@@ -325,6 +355,9 @@ export default function Home() {
       } else if (gameState === 'sapphire-duo') {
         // Update sapphire duo animation
         sapphireDuoAnimationRef.current += 0.02
+      } else if (gameState === 'golden-monkey') {
+        // Update golden monkey animation
+        goldenMonkeyAnimationRef.current += 0.02
       } else if (gameState === 'flying' && projectileRef.current) {
         // Update projectile physics
         const projectile = projectileRef.current
@@ -360,13 +393,15 @@ export default function Home() {
             }
 
             // Check for special scenes
-            if (distance >= 250 && distance <= 300) {
+            if (distance >= 250 && distance <= 400) {
               triggerWineMonkeyScene()
             } else if (distance >= 700 && distance <= 749) {
               triggerSapphireDuoScene()
-            } else if (distance >= 750 && distance <= 800) {
+            } else if (distance >= 750 && distance <= 819) {
               triggerRubyMonkeyScene()
-            } else if (distance > 800) {
+            } else if (distance >= 820 && distance <= 829) {
+              triggerGoldenMonkeyScene()
+            } else if (distance >= 830) {
               triggerDiamondMonkeyScene()
             } else {
               setGameState('result')
@@ -412,6 +447,8 @@ export default function Home() {
         drawSapphireDuoState(ctx, width, height)
       } else if (gameState === 'ruby-monkey') {
         drawRubyMonkeyState(ctx, width, height)
+      } else if (gameState === 'golden-monkey') {
+        drawGoldenMonkeyState(ctx, width, height)
       } else if (gameState === 'diamond-monkey') {
         drawDiamondMonkeyState(ctx, width, height)
       } else if (gameState === 'result') {
@@ -883,6 +920,171 @@ export default function Home() {
       ctx.fillText(t('rubyMonkeyTitle'), width / 2, height / 2 + 120)
     }
 
+    const drawGoldenMonkeyState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      // Draw magnificent golden background
+      const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height))
+      gradient.addColorStop(0, '#FFF8DC')
+      gradient.addColorStop(0.3, '#FFD700')
+      gradient.addColorStop(0.6, '#DAA520')
+      gradient.addColorStop(1, '#B8860B')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, width, height)
+
+      // Animation progress
+      const animTime = goldenMonkeyAnimationRef.current
+      const slideProgress = Math.min(animTime * 2, 1) // Slide in over first 0.5 seconds
+      const slideOutProgress = Math.max(0, (animTime - 5.5) * 2) // Slide out in last 0.5 seconds
+
+      // Add golden sparkle effect
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.8)'
+      for (let i = 0; i < 30; i++) {
+        const x = Math.random() * width
+        const y = Math.random() * height
+        const size = Math.random() * 4 + 1
+        const opacity = Math.random() * 0.6 + 0.4
+        ctx.globalAlpha = opacity
+        ctx.beginPath()
+        ctx.arc(x, y, size, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.globalAlpha = 1
+
+      // Add golden rays
+      ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)'
+      ctx.lineWidth = 3
+      for (let i = 0; i < 8; i++) {
+        const angle = (i * Math.PI * 2) / 8 + animTime
+        const startX = width / 2 + Math.cos(angle) * 80
+        const startY = height / 2 + Math.sin(angle) * 80
+        const endX = width / 2 + Math.cos(angle) * 250
+        const endY = height / 2 + Math.sin(angle) * 250
+
+        ctx.beginPath()
+        ctx.moveTo(startX, startY)
+        ctx.lineTo(endX, endY)
+        ctx.stroke()
+      }
+
+      // Calculate monkey position (slide in from right, slide out to right)
+      let monkeyX = width / 2 - 100
+      if (slideProgress < 1) {
+        monkeyX = width + 200 - (width / 2 + 300) * slideProgress
+      } else if (slideOutProgress > 0) {
+        monkeyX = (width / 2 - 100) + (width / 2 + 300) * slideOutProgress
+      }
+
+      // Add majestic floating animation
+      const floatOffset = Math.sin(animTime * 3) * 15
+
+      // Draw supreme golden monkey character
+      ctx.save()
+      ctx.translate(monkeyX, height / 2 + floatOffset)
+      ctx.font = '140px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText('🐒', 0, 0)
+      ctx.restore()
+
+      // Draw golden elements around the monkey (only when in position)
+      if (slideProgress >= 1 && slideOutProgress === 0) {
+        // Golden crown
+        ctx.font = '70px Arial'
+        ctx.textAlign = 'center'
+        ctx.fillText('👑', monkeyX, height / 2 - 80 + floatOffset)
+
+        // Golden stars
+        ctx.font = '50px Arial'
+        const starPulse = Math.sin(animTime * 4) * 0.2 + 1
+        ctx.save()
+        ctx.translate(monkeyX - 120, height / 2 - 30 + floatOffset)
+        ctx.scale(starPulse, starPulse)
+        ctx.fillText('⭐', 0, 0)
+        ctx.restore()
+
+        ctx.save()
+        ctx.translate(monkeyX + 120, height / 2 - 30 + floatOffset)
+        ctx.scale(starPulse, starPulse)
+        ctx.fillText('⭐', 0, 0)
+        ctx.restore()
+
+        // Golden trophy
+        ctx.font = '60px Arial'
+        ctx.fillText('🏆', monkeyX + 80, height / 2 + 60 + floatOffset)
+      }
+
+      // Draw speech bubble background (golden theme)
+      const bubbleX = width / 2
+      const bubbleY = height / 2 - 140
+      const bubbleWidth = Math.min(width - 40, 700)
+      const bubbleHeight = 90
+
+      // Golden gradient bubble background
+      const bubbleGradient = ctx.createLinearGradient(bubbleX - bubbleWidth/2, bubbleY - bubbleHeight/2, bubbleX + bubbleWidth/2, bubbleY + bubbleHeight/2)
+      bubbleGradient.addColorStop(0, 'rgba(255, 215, 0, 0.95)')
+      bubbleGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.95)')
+      bubbleGradient.addColorStop(1, 'rgba(255, 215, 0, 0.95)')
+      ctx.fillStyle = bubbleGradient
+
+      ctx.strokeStyle = '#B8860B'
+      ctx.lineWidth = 4
+
+      // Rounded rectangle for speech bubble
+      ctx.beginPath()
+      ctx.roundRect(bubbleX - bubbleWidth/2, bubbleY - bubbleHeight/2, bubbleWidth, bubbleHeight, 25)
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw speech bubble tail
+      ctx.beginPath()
+      ctx.moveTo(bubbleX - 30, bubbleY + bubbleHeight/2)
+      ctx.lineTo(bubbleX, bubbleY + bubbleHeight/2 + 25)
+      ctx.lineTo(bubbleX + 30, bubbleY + bubbleHeight/2)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw the quote with golden styling
+      ctx.fillStyle = '#B8860B'
+      ctx.font = 'bold 20px serif'
+      ctx.textAlign = 'center'
+
+      // Word wrap the quote
+      const words = goldenMonkeyQuote.split(' ')
+      const maxWidth = bubbleWidth - 50
+      let line = ''
+      let y = bubbleY - 15
+
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' '
+        const metrics = ctx.measureText(testLine)
+        const testWidth = metrics.width
+
+        if (testWidth > maxWidth && n > 0) {
+          ctx.fillText(line, bubbleX, y)
+          line = words[n] + ' '
+          y += 28
+        } else {
+          line = testLine
+        }
+      }
+      ctx.fillText(line, bubbleX, y)
+
+      // Draw title with golden glow effect
+      ctx.shadowColor = 'rgba(255, 215, 0, 0.8)'
+      ctx.shadowBlur = 15
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 0
+
+      ctx.fillStyle = '#FFD700'
+      ctx.font = 'bold 30px serif'
+      ctx.fillText(t('goldenMonkeyTitle'), width / 2, height / 2 + 130)
+
+      // Reset shadow
+      ctx.shadowColor = 'transparent'
+      ctx.shadowBlur = 0
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 0
+    }
+
     const drawDiamondMonkeyState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
       // Draw magnificent diamond background
       const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height))
@@ -1020,7 +1222,8 @@ export default function Home() {
             const getScoreMessage = (score: number) => {
       if (score >= 1000) return { text: '🏆 PERFECT! 🏆', color: '#FF1493' }
       if (score >= 950) return { text: '💎 LEGENDARY! 💎', color: '#9932CC' }
-      if (score >= 900) return { text: '⭐ AMAZING! ⭐', color: '#FF4500' }
+      if (score >= 830) return { text: '💎 DIAMOND! 💎', color: '#9932CC' }
+      if (score >= 820) return { text: '🌟 GOLDEN! 🌟', color: '#FFD700' }
       if (score >= 800) return { text: '🔥 EXCELLENT! 🔥', color: '#FF6347' }
       if (score >= 700) return { text: '🌟 GREAT! 🌟', color: '#FFD700' }
       if (score >= 600) return { text: '👍 GOOD! 👍', color: '#32CD32' }
@@ -1050,8 +1253,12 @@ export default function Home() {
         ctx.fillStyle = '#9932CC'
         ctx.font = '16px Arial'
         ctx.fillText(translations[language].achievements.legendary, width / 2, height / 2 + 40)
-      } else if (lastScore >= 900) {
-        ctx.fillStyle = '#FF4500'
+      } else if (lastScore >= 830) {
+        ctx.fillStyle = '#9932CC'
+        ctx.font = '16px Arial'
+        ctx.fillText(translations[language].achievements.legendary, width / 2, height / 2 + 40)
+      } else if (lastScore >= 820) {
+        ctx.fillStyle = '#FFD700'
         ctx.font = '16px Arial'
         ctx.fillText(translations[language].achievements.amazing, width / 2, height / 2 + 40)
       } else if (lastScore >= 800) {
@@ -1255,6 +1462,17 @@ export default function Home() {
         }
         setGameState('result')
         setRubyMonkeyQuote('')
+      } else if (gameState === 'golden-monkey') {
+        // Skip golden monkey scene on click
+        if (goldenMonkeyTimeoutRef.current) {
+          clearTimeout(goldenMonkeyTimeoutRef.current)
+        }
+        if (audioRef.current && !isMuted) {
+          audioRef.current.volume = 0.5
+        }
+        setGameState('result')
+        setGoldenMonkeyQuote('')
+        goldenMonkeyAnimationRef.current = 0
       } else if (gameState === 'diamond-monkey') {
         // Skip diamond monkey scene on click
         if (diamondMonkeyTimeoutRef.current) {

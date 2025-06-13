@@ -18,7 +18,7 @@ export interface Translations {
   rotatePhone: string
   forceRotatePhone: string
 
-  // Wine Monkey Scene (250-300m)
+  // Wine Monkey Scene (250-400m)
   wineMonkeyTitle: string
   wineMonkeyLines: string[]
 
@@ -30,7 +30,11 @@ export interface Translations {
   rubyMonkeyTitle: string
   rubyMonkeyLines: string[]
 
-  // Diamond Monkey Scene (800m+)
+  // Golden Monkey Scene (820-829m)
+  goldenMonkeyTitle: string
+  goldenMonkeyLines: string[]
+
+  // Diamond Monkey Scene (830m+)
   diamondMonkeyTitle: string
   diamondMonkeyLines: string[]
 
@@ -63,7 +67,7 @@ export const translations: Record<Language, Translations> = {
     mute: "🔇",
     unmute: "🔊",
 
-    // Wine Monkey Scene (250-300m)
+    // Wine Monkey Scene (250-400m)
     wineMonkeyTitle: "Art Critic Monkey",
     wineMonkeyLines: [
       "Ah, a bold yet directionless flight.",
@@ -95,7 +99,19 @@ export const translations: Record<Language, Translations> = {
       "Magnificent technique displayed!"
     ],
 
-    // Diamond Monkey Scene (800m+)
+    // Golden Monkey Scene (820-829m)
+    goldenMonkeyTitle: "🌟 GOLDEN SUPREME MONKEY 🌟",
+    goldenMonkeyLines: [
+      "INCREDIBLE! You have achieved golden mastery!",
+      "The golden aura surrounds your supreme skill!",
+      "Witness the birth of a golden legend!",
+      "Your technique blazes with golden fire!",
+      "The golden monkey bows to your excellence!",
+      "Magnificent! You shine like pure gold!",
+      "Golden perfection flows through your launch!"
+    ],
+
+    // Diamond Monkey Scene (830m+)
     diamondMonkeyTitle: "💎 DIAMOND EMPEROR MONKEY 💎",
     diamondMonkeyLines: [
       "Magnificent... You have transcended mortal limits.",
@@ -135,7 +151,7 @@ export const translations: Record<Language, Translations> = {
     mute: "🔇",
     unmute: "🔊",
 
-    // Wine Monkey Scene (250-300m)
+    // Wine Monkey Scene (250-400m)
     wineMonkeyTitle: "芸術評論家モンキー",
     wineMonkeyLines: [
       "力強いが…方向性に欠けるね。",
@@ -167,7 +183,19 @@ export const translations: Record<Language, Translations> = {
       "見事な技術の披露だ！"
     ],
 
-    // Diamond Monkey Scene (800m+)
+    // Golden Monkey Scene (820-834m)
+    goldenMonkeyTitle: "🌟 ゴールデン至高モンキー 🌟",
+    goldenMonkeyLines: [
+      "信じられない！君は黄金の熟練を達成した！",
+      "黄金のオーラが君の至高の技術を包んでいる！",
+      "黄金の伝説の誕生を目撃せよ！",
+      "君の技術は黄金の炎で燃えている！",
+      "黄金の猿が君の卓越性に頭を下げている！",
+      "壮大だ！君は純金のように輝いている！",
+      "黄金の完璧が君の発射に流れている！"
+    ],
+
+    // Diamond Monkey Scene (835m+)
     diamondMonkeyTitle: "💎 ダイヤモンド皇帝モンキー 💎",
     diamondMonkeyLines: [
       "壮大だ…君は人間の限界を超越した。",
