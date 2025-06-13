@@ -3,24 +3,31 @@
 A hilariously unnecessary yet oddly satisfying timing game.  
 Sync two trembling poops and fling one across a grassy field while a sarcastic monkey critiques your form.
 
+https://github.com/user-attachments/assets/d692b6a7-2ab0-4f11-8b26-058918d53ae9
 
-https://github.com/user-attachments/assets/fd0af5e8-13c2-4ded-8600-1929d04b6474
+---
+
+⚠️ **Mobile support is currently under development.**  
+Please play on a desktop browser for the best experience.
+
+🎯 **New Goal: Reach 830m!**
 
 ---
 
 ## 🎮 Gameplay
 
 - Tap to sync two rotating poops
-- Launch the poop at just the right moment
-- Fly as far as possible
-- If you fall short, a wine-bottle-holding monkey will judge your performance... artistically.
-- 🎯 Goal: Reach 800m – the monkey may change his tone...
+- Launch the poop when their center overlaps perfectly
+- The poop’s **flight distance depends on how close your tap is to the perfect overlap timing** — when the middle circle is at its largest.
+- If your timing is off, a sarcastic monkey will be watching...
+
+⏱️ **Tap at the right moment to maximize your launch distance!**
 
 ---
 
 ## 🐒 Monkey Performance
 
-At 150m, 250m, and 300m, mocking monkeys will appear holding wine bottles,  
+At 150m, 250m, and 300m, mocking monkeys appear holding wine bottles,  
 absorbing your poop mid-air and delivering elegant, sarcastic commentary.
 
 > "_This is not mere feces... it’s a postmodern failure._"  
@@ -30,9 +37,9 @@ absorbing your poop mid-air and delivering elegant, sarcastic commentary.
 
 ## 🎨 Concept
 
-- 💩 Poop as performance art
-- 🌌 A visually infinite, high-class landscape
-- 🐵 Monkeys as social critics
+- 💩 Poop as performance art  
+- 🌌 A visually infinite, high-class landscape  
+- 🐵 Monkeys as social critics  
 - 🎻 Classical music turns absurdity into poetry
 
 > _A poop-flinging game with the soul of a gallery installation._
@@ -43,7 +50,7 @@ absorbing your poop mid-air and delivering elegant, sarcastic commentary.
 
 [![Watch Demo](https://img.youtube.com/vi/YOUTUBE_VIDEO_ID/hqdefault.jpg)](https://youtu.be/YOUTUBE_VIDEO_ID)
 
-> 👆 Replace `YOUTUBE_VIDEO_ID` with your actual ID after uploading.
+> 🔄 Replace `YOUTUBE_VIDEO_ID` with your actual YouTube ID.
 
 ---
 
@@ -53,7 +60,7 @@ absorbing your poop mid-air and delivering elegant, sarcastic commentary.
 - 🐒 Multiple mocking monkeys based on flight distance
 - 🌍 English / Japanese language toggle
 - 🔇 Mute button for peace of mind
-- 📱 Fully mobile-ready with responsive canvas
+- 🖥 **Best played on desktop (mobile support in progress)**
 
 ---
 
@@ -63,7 +70,7 @@ absorbing your poop mid-air and delivering elegant, sarcastic commentary.
 - Styling: Tailwind CSS
 - Audio: HTML5 Audio API
 - Language: TypeScript
-- Hosting: Vercel (Recommended)
+- Hosting: Vercel
 
 ---
 
@@ -71,7 +78,7 @@ absorbing your poop mid-air and delivering elegant, sarcastic commentary.
 
 - English 🇺🇸
 - Japanese 🇯🇵
-- Add your own via `translations.ts`
+- Easily extendable via `translations.ts`
 
 ---
 
