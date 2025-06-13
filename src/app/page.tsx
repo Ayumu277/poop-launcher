@@ -49,6 +49,8 @@ export default function Home() {
   const [sapphireDuoQuote, setSapphireDuoQuote] = useState<string>('')
   const [isMuted, setIsMuted] = useState<boolean>(false)
   const [language, setLanguage] = useState<Language>('en')
+  const [isMobile, setIsMobile] = useState<boolean>(false)
+  const [isPortrait, setIsPortrait] = useState<boolean>(false)
   const wineMonkeyAnimationRef = useRef<number>(0)
   const sapphireDuoAnimationRef = useRef<number>(0)
 
@@ -75,6 +77,15 @@ export default function Home() {
     return translations[language][key] as string[]
   }
 
+  // Check if device is mobile and orientation
+  const checkDeviceAndOrientation = () => {
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768
+    const isPortraitMode = window.innerHeight > window.innerWidth
+
+    setIsMobile(isMobileDevice)
+    setIsPortrait(isPortraitMode)
+  }
+
   useEffect(() => {
     // Load best score and language from localStorage on mount
     const savedBestScore = localStorage.getItem('poopGameBestScore')
@@ -87,73 +98,28 @@ export default function Home() {
       setLanguage(savedLanguage)
     }
 
+    // Check device and orientation
+    checkDeviceAndOrientation()
+
     // Initialize background elements
     initializeBackground()
 
     // Load mute state from localStorage
     const savedMuteState = localStorage.getItem('poopGameMuted')
-    if (savedMuteState) {
-      setIsMuted(savedMuteState === 'true')
-    }
+    const initialMuteState = savedMuteState === 'true'
+    setIsMuted(initialMuteState)
 
-    // Initialize audio
-    audioRef.current = new Audio('/bgm/sergio_magic.mp3')
-    audioRef.current.loop = true
-    audioRef.current.volume = savedMuteState === 'true' ? 0 : 0.5
+    // Initialize audio element
+    const audio = new Audio('/bgm/sergio_magic.mp3')
+    audio.loop = true
+    audio.volume = initialMuteState ? 0 : 0.5
+    audioRef.current = audio
 
-    // Try to start playing immediately (will be blocked by autoplay policy)
-    const playAudio = async () => {
-      if (!audioRef.current) return
-      try {
-        audioRef.current.currentTime = 0
-        await audioRef.current.play()
-        setAudioInitialized(true)
-        console.log('Background music started playing automatically')
-      } catch (error) {
-        console.log('Audio autoplay blocked, will start on user interaction:', error)
-        // Try again after a short delay
-        setTimeout(() => {
-          if (audioRef.current && !audioInitialized) {
-            audioRef.current.play().then(() => {
-              setAudioInitialized(true)
-              console.log('Background music started playing on retry')
-            }).catch(() => {
-              console.log('Audio still blocked, waiting for user interaction')
-            })
-          }
-        }, 1000)
-      }
-    }
-    playAudio()
-
-    // Cleanup function to stop audio when component unmounts or user navigates away
-    const handleBeforeUnload = () => {
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-    }
-
-    const handleVisibilityChange = () => {
-      if (document.hidden && audioRef.current) {
-        audioRef.current.pause()
-      } else if (!document.hidden && audioRef.current && audioInitialized) {
-        audioRef.current.play().catch(console.log)
-      }
-    }
-
-    // Add event listeners for cleanup
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    // Cleanup function
+    // Cleanup function to stop audio when component unmounts
     return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
+      audio.pause()
+      audio.currentTime = 0
+
       if (wineMonkeyTimeoutRef.current) {
         clearTimeout(wineMonkeyTimeoutRef.current)
       }
@@ -165,6 +131,20 @@ export default function Home() {
       }
     }
   }, [])
+
+  // Effect to control audio playback based on isMuted state
+  useEffect(() => {
+    if (audioRef.current) {
+      if (isMuted) {
+        audioRef.current.pause()
+      } else {
+        // Only play if audio has been initialized by user interaction
+        if (audioInitialized) {
+          audioRef.current.play().catch(console.error)
+        }
+      }
+    }
+  }, [isMuted, audioInitialized])
 
   const initializeBackground = () => {
     const elements: BackgroundElement[] = []
@@ -304,10 +284,28 @@ export default function Home() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-        // Set canvas size to viewport
+                // Set canvas size to viewport
     const resizeCanvas = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
+      // Get device pixel ratio for high DPI displays
+      const dpr = window.devicePixelRatio || 1
+
+      // Set canvas size to match viewport
+      canvas.width = window.innerWidth * dpr
+      canvas.height = window.innerHeight * dpr
+
+      // Scale the canvas back down using CSS
+      canvas.style.width = window.innerWidth + 'px'
+      canvas.style.height = window.innerHeight + 'px'
+
+      // Scale the drawing context so everything draws at the correct size
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.scale(dpr, dpr)
+      }
+
+      // Check device and orientation on resize
+      checkDeviceAndOrientation()
+
       drawGame()
     }
 
@@ -341,11 +339,11 @@ export default function Home() {
 
         // Update scroll offset to follow projectile
         if (canvas) {
-          const targetScroll = Math.max(0, projectile.x - canvas.width / 3)
+          const targetScroll = Math.max(0, projectile.x - window.innerWidth / 3)
           scrollOffsetRef.current = targetScroll
 
                     // Check if projectile has landed
-          if (projectile.y >= canvas.height - 100) {
+          if (projectile.y >= window.innerHeight - 100) {
             // Calculate final distance
             const distance = Math.round(projectile.x / 10) // Convert pixels to meters
             setLastScore(distance)
@@ -378,44 +376,49 @@ export default function Home() {
     }
 
     const drawGame = () => {
+      // Use window dimensions for drawing (canvas is scaled for high DPI)
+      const width = window.innerWidth
+      const height = window.innerHeight
+
       // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      ctx.clearRect(0, 0, width, height)
 
       // Draw sky background
-      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height)
+      const gradient = ctx.createLinearGradient(0, 0, 0, height)
       gradient.addColorStop(0, '#87CEEB') // Sky blue
       gradient.addColorStop(0.7, '#FDF1D4') // Light beige
       gradient.addColorStop(1, '#90EE90') // Light green
       ctx.fillStyle = gradient
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.fillRect(0, 0, width, height)
 
       // Draw background elements with scroll offset
-      drawBackground(ctx, canvas.width, canvas.height)
+      drawBackground(ctx, width, height)
 
       // Draw state-specific content
       if (gameState === 'ready') {
-        drawReadyState(ctx, canvas.width, canvas.height)
+        drawReadyState(ctx, width, height)
       } else if (gameState === 'playing') {
-        drawPlayingState(ctx, canvas.width, canvas.height)
+        drawPlayingState(ctx, width, height)
       } else if (gameState === 'flying') {
-        drawFlyingState(ctx, canvas.width, canvas.height)
+        drawFlyingState(ctx, width, height)
       } else if (gameState === 'wine-monkey') {
-        drawWineMonkeyState(ctx, canvas.width, canvas.height)
+        drawWineMonkeyState(ctx, width, height)
       } else if (gameState === 'sapphire-duo') {
-        drawSapphireDuoState(ctx, canvas.width, canvas.height)
+        drawSapphireDuoState(ctx, width, height)
       } else if (gameState === 'ruby-monkey') {
-        drawRubyMonkeyState(ctx, canvas.width, canvas.height)
+        drawRubyMonkeyState(ctx, width, height)
       } else if (gameState === 'diamond-monkey') {
-        drawDiamondMonkeyState(ctx, canvas.width, canvas.height)
+        drawDiamondMonkeyState(ctx, width, height)
       } else if (gameState === 'result') {
-        drawResultState(ctx, canvas.width, canvas.height)
+        drawResultState(ctx, width, height)
       }
     }
 
     const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
       ctx.font = '24px Arial'
       backgroundElementsRef.current.forEach(element => {
-        const x = element.x - scrollOffsetRef.current
+        // Apply scroll offset only during flying state
+        const x = gameState === 'flying' ? element.x - scrollOffsetRef.current : element.x
         // Only draw elements that are visible on screen
         if (x > -50 && x < width + 50) {
           ctx.fillText(element.emoji, x, element.y)
@@ -437,6 +440,24 @@ export default function Home() {
       ctx.fillStyle = '#333'
       ctx.font = '16px Arial'
       ctx.fillText(t('start'), width / 2, height / 2 + 30)
+
+      // Draw language toggle icon on home screen
+      ctx.fillStyle = '#8B4513'
+      ctx.font = 'bold 24px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText('🌐', width / 2 - 100, height / 2 + 80)
+      ctx.fillStyle = '#666'
+      ctx.font = '12px Arial'
+      ctx.fillText(language === 'en' ? '日本語' : 'EN', width / 2 - 100, height / 2 + 100)
+
+      // Draw audio toggle icon on home screen with clear ON/OFF indication
+      ctx.fillStyle = isMuted ? '#DC2626' : '#16A34A' // Red for OFF, Green for ON
+      ctx.font = 'bold 28px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText(isMuted ? '🔇' : '🔊', width / 2 + 100, height / 2 + 80)
+      ctx.fillStyle = isMuted ? '#DC2626' : '#16A34A'
+      ctx.font = 'bold 14px Arial'
+      ctx.fillText(isMuted ? (language === 'en' ? 'OFF' : 'オフ') : (language === 'en' ? 'ON' : 'オン'), width / 2 + 100, height / 2 + 100)
     }
 
         const createRainbowGradient = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) => {
@@ -466,7 +487,7 @@ export default function Home() {
       ctx.lineWidth = 6
       ctx.shadowBlur = 0
       ctx.beginPath()
-      ctx.arc(250 - scrollOffsetRef.current, height / 2, radiusA, 0, Math.PI * 2)
+      ctx.arc(250, height / 2, radiusA, 0, Math.PI * 2)
       ctx.stroke()
 
       // Draw poopB (right circle - outline only)
@@ -474,7 +495,7 @@ export default function Home() {
       ctx.lineWidth = 6
       ctx.shadowBlur = 0
       ctx.beginPath()
-      ctx.arc(400 - scrollOffsetRef.current, height / 2, radiusB, 0, Math.PI * 2)
+      ctx.arc(400, height / 2, radiusB, 0, Math.PI * 2)
       ctx.stroke()
 
       // Reset shadow for text
@@ -1077,9 +1098,9 @@ export default function Home() {
 
       // Calculate circle positions (updated positions)
       const centerAX = 250
-      const centerAY = canvas.height / 2
+      const centerAY = window.innerHeight / 2
       const centerBX = 400
-      const centerBY = canvas.height / 2
+      const centerBY = window.innerHeight / 2
 
       // Calculate overlap area
       const overlapArea = calculateCircleOverlapArea(centerAX, centerAY, rA, centerBX, centerBY, rB)
@@ -1114,8 +1135,8 @@ export default function Home() {
       }
 
               projectileRef.current = {
-          x: 325, // Between the two circles (updated position)
-          y: canvas.height / 2,
+          x: 325, // Between the two circles
+          y: window.innerHeight / 2,
           vx: launchPower * 18 + 14, // Balanced horizontal velocity
           vy: launchPower * -11 - 6, // Balanced vertical velocity
           gravity: 0.19, // Slightly higher gravity for moderate difficulty
@@ -1132,19 +1153,42 @@ export default function Home() {
       poopBRef.current.angle = 0
     }
 
-    const handleCanvasClick = () => {
+    const handleCanvasClick = (event: MouseEvent | TouchEvent) => {
       // Initialize audio on first interaction
       if (!audioInitialized) {
         initializeAudio()
       }
 
       if (gameState === 'ready') {
-        // Ensure BGM is playing when starting game
-        if (audioRef.current && audioInitialized) {
-          audioRef.current.play().catch(console.error)
+        const canvas = canvasRef.current
+        if (!canvas) return
+
+        const rect = canvas.getBoundingClientRect()
+        const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX
+        const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY
+        const x = clientX - rect.left
+        const y = clientY - rect.top
+
+        // Check if clicked on language toggle area (use window dimensions, not canvas dimensions)
+        const langIconX = window.innerWidth / 2 - 100
+        const langIconY = window.innerHeight / 2 + 80
+        if (Math.abs(x - langIconX) < 40 && Math.abs(y - langIconY) < 40) {
+          toggleLanguage()
+          return
         }
+
+        // Check if clicked on audio toggle area (use window dimensions, not canvas dimensions)
+        const audioIconX = window.innerWidth / 2 + 100
+        const audioIconY = window.innerHeight / 2 + 80
+        if (Math.abs(x - audioIconX) < 40 && Math.abs(y - audioIconY) < 40) {
+          toggleMute()
+          return
+        }
+
+        // Otherwise start the game
+        // BGM continues playing (no need to restart)
         resetPoopSpeeds()
-        scrollOffsetRef.current = 0 // Reset scroll
+        scrollOffsetRef.current = 0 // Reset scroll to center view
         setGameState('playing')
       } else if (gameState === 'playing') {
         launchProjectile()
@@ -1188,58 +1232,56 @@ export default function Home() {
         }
         setGameState('result')
         setDiamondMonkeyQuote('')
+      } else if (gameState === 'result') {
+        // Return to ready state on click
+        handleReset()
       }
-      // Note: flying and result states don't respond to canvas clicks
+      // Note: flying state doesn't respond to canvas clicks
     }
 
     // Initial setup
     resizeCanvas()
     animate() // Start animation loop
     window.addEventListener('resize', resizeCanvas)
-    canvas.addEventListener('click', handleCanvasClick)
-    canvas.addEventListener('touchstart', handleCanvasClick)
+    window.addEventListener('orientationchange', () => {
+      // Delay to ensure orientation change is complete
+      setTimeout(() => {
+        resizeCanvas()
+      }, 100)
+    })
+    canvas.addEventListener('click', handleCanvasClick as EventListener)
+    canvas.addEventListener('touchstart', handleCanvasClick as EventListener)
 
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
       window.removeEventListener('resize', resizeCanvas)
-      canvas.removeEventListener('click', handleCanvasClick)
-      canvas.removeEventListener('touchstart', handleCanvasClick)
+      window.removeEventListener('orientationchange', resizeCanvas)
+      canvas.removeEventListener('click', handleCanvasClick as EventListener)
+      canvas.removeEventListener('touchstart', handleCanvasClick as EventListener)
     }
-  }, [gameState, language])
+  }, [gameState, language, isMuted, isMobile, isPortrait])
 
   const handleReset = () => {
-    // Initialize audio on button click too
+    // Initialize audio on button click too (but don't restart if already playing)
     if (!audioInitialized) {
       initializeAudio()
     }
     // Keep BGM playing continuously - no restart needed
 
+    // Reset scroll offset to prevent screen shifting
     scrollOffsetRef.current = 0
     projectileRef.current = null
     setGameState('ready')
   }
 
-  const initializeAudio = async () => {
+  const initializeAudio = () => {
     if (!audioInitialized && audioRef.current) {
-      try {
-        audioRef.current.currentTime = 0
-        audioRef.current.volume = isMuted ? 0 : 0.5
-        await audioRef.current.play()
-        setAudioInitialized(true)
-        console.log('Background music started playing')
-      } catch (error) {
-        console.log('Audio autoplay blocked, will try again on next interaction:', error)
-        // Force play attempt
-        setTimeout(() => {
-          if (audioRef.current && !audioInitialized) {
-            audioRef.current.play().catch(() => {
-              console.log('Audio still blocked')
-            })
-          }
-        }, 100)
+      if (!isMuted) {
+        audioRef.current.play().catch(console.error)
       }
+      setAudioInitialized(true)
     }
   }
 
@@ -1247,10 +1289,6 @@ export default function Home() {
     const newMutedState = !isMuted
     setIsMuted(newMutedState)
     localStorage.setItem('poopGameMuted', newMutedState.toString())
-
-    if (audioRef.current) {
-      audioRef.current.volume = newMutedState ? 0 : 0.5
-    }
   }
 
   const toggleLanguage = () => {
@@ -1260,53 +1298,40 @@ export default function Home() {
   }
 
   return (
-    <>
+    <div className="relative w-screen h-screen overflow-hidden">
       <canvas
         ref={canvasRef}
         id="gameCanvas"
+        className="absolute top-0 left-0 w-full h-full"
         style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          cursor: (gameState === 'result' || gameState === 'flying') ? 'default' : 'pointer',
+          cursor: gameState === 'flying' ? 'default' : 'pointer',
           touchAction: 'manipulation',
-          pointerEvents: (gameState === 'result' || gameState === 'flying') ? 'none' : 'auto',
+          pointerEvents: gameState === 'flying' ? 'none' : 'auto',
           imageRendering: 'auto' // Standard canvas rendering
         }}
       />
 
+      {/* Mobile Portrait Overlay */}
+      {isMobile && isPortrait && (
+        <div className="absolute inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+          <div className="text-center p-8 bg-white bg-opacity-90 rounded-lg mx-4 max-w-sm">
+            <div className="text-6xl mb-4">📱</div>
+            <div className="text-xl font-bold text-gray-800 mb-2">
+              {t('rotatePhone')}
+            </div>
+            <div className="text-4xl animate-bounce">
+              🔄
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Language Toggle Button */}
       <button
         onClick={toggleLanguage}
+        className="fixed top-5 left-5 px-4 py-2 rounded-lg border-none bg-amber-800 bg-opacity-90 text-white text-sm font-bold cursor-pointer z-50 flex items-center justify-center shadow-lg transition-all duration-200 hover:bg-amber-900 hover:scale-105 active:scale-95"
         style={{
-          position: 'fixed',
-          top: '20px',
-          left: '20px',
-          padding: '8px 16px',
-          borderRadius: '8px',
-          border: 'none',
-          backgroundColor: 'rgba(139, 69, 19, 0.9)',
-          color: 'white',
-          fontSize: '14px',
-          fontWeight: 'bold',
-          cursor: 'pointer',
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-          transition: 'all 0.2s ease',
           touchAction: 'manipulation'
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(101, 67, 33, 0.9)'
-          e.currentTarget.style.transform = 'scale(1.05)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(139, 69, 19, 0.9)'
-          e.currentTarget.style.transform = 'scale(1)'
         }}
       >
         {language === 'en' ? '日本語' : 'EN'}
@@ -1315,85 +1340,36 @@ export default function Home() {
       {/* Mute Toggle Button */}
       <button
         onClick={toggleMute}
+        className={`fixed top-5 right-5 w-16 h-16 rounded-full border-2 text-2xl cursor-pointer z-50 flex items-center justify-center shadow-lg transition-all duration-200 hover:scale-110 active:scale-95 ${
+          isMuted
+            ? 'bg-red-600 border-red-700 text-white hover:bg-red-700'
+            : 'bg-green-600 border-green-700 text-white hover:bg-green-700'
+        }`}
         style={{
-          position: 'fixed',
-          top: '20px',
-          right: '20px',
-          width: '60px',
-          height: '60px',
-          borderRadius: '50%',
-          border: 'none',
-          backgroundColor: 'rgba(139, 69, 19, 0.9)',
-          color: 'white',
-          fontSize: '24px',
-          cursor: 'pointer',
-          zIndex: 1000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-          transition: 'all 0.2s ease',
           touchAction: 'manipulation'
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(101, 67, 33, 0.9)'
-          e.currentTarget.style.transform = 'scale(1.1)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'rgba(139, 69, 19, 0.9)'
-          e.currentTarget.style.transform = 'scale(1)'
-        }}
       >
-        {isMuted ? t('mute') : t('unmute')}
+        {isMuted ? '🔇' : '🔊'}
       </button>
       {gameState === 'result' && (
         <div
           id="resultBox"
-          style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            backgroundColor: '#FDF1D4',
-            border: '3px solid #8B4513',
-            borderRadius: '12px',
-            padding: '24px',
-            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.2)',
-            textAlign: 'center',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Noto Color Emoji", sans-serif',
-            zIndex: 10
-          }}
+          className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-amber-50 border-4 border-amber-800 rounded-xl p-6 shadow-2xl text-center z-40 max-w-sm mx-4"
         >
-          <div style={{ fontSize: '20px', marginBottom: '16px', color: '#333' }}>
+          <div className="text-xl mb-4 text-gray-800 font-semibold">
             💩{t('distance')}: {lastScore}m | BEST: {bestScore}m
           </div>
           <button
             onClick={handleReset}
-            style={{
-              backgroundColor: '#8B4513',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              padding: '12px 24px',
-              fontSize: '16px',
-              cursor: 'pointer',
-              fontWeight: 'bold',
-              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#654321'
-              e.currentTarget.style.transform = 'translateY(-1px)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#8B4513'
-              e.currentTarget.style.transform = 'translateY(0)'
-            }}
+            className="bg-amber-800 text-white border-none rounded-lg px-6 py-3 text-base cursor-pointer font-bold shadow-md transition-all duration-200 hover:bg-amber-900 hover:-translate-y-0.5 active:translate-y-0 mb-2"
           >
-                                        {t('tryAgain')}
+            {t('tryAgain')}
           </button>
+          <div className="text-sm text-gray-600 mt-2">
+            {language === 'en' ? 'Or tap anywhere to restart' : 'または画面をタップして再開'}
+          </div>
         </div>
       )}
-    </>
+    </div>
   )
 }

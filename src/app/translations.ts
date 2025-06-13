@@ -15,6 +15,7 @@ export interface Translations {
   results: string
   mute: string
   unmute: string
+  rotatePhone: string
 
   // Wine Monkey Scene (250-300m)
   wineMonkeyTitle: string
@@ -58,6 +59,7 @@ export const translations: Record<Language, Translations> = {
     results: "🎉 Results 🎉",
     mute: "🔇",
     unmute: "🔊",
+    rotatePhone: "Turn your phone sideways to play!",
 
     // Wine Monkey Scene (250-300m)
     wineMonkeyTitle: "Art Critic Monkey",
@@ -128,6 +130,7 @@ export const translations: Record<Language, Translations> = {
     results: "🎉 結果 🎉",
     mute: "🔇",
     unmute: "🔊",
+    rotatePhone: "スマホを横にしてね！",
 
     // Wine Monkey Scene (250-300m)
     wineMonkeyTitle: "芸術評論家モンキー",
