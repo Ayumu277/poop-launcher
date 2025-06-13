@@ -1,103 +1,1399 @@
-import Image from "next/image";
+'use client'
+
+import { useEffect, useRef, useState } from 'react'
+import { translations, Language } from './translations'
+
+type GameState = 'ready' | 'playing' | 'flying' | 'wine-monkey' | 'sapphire-duo' | 'ruby-monkey' | 'diamond-monkey' | 'result'
+
+interface PoopState {
+  angle: number
+  speed: number
+  baseRadius: number
+  amplitude: number
+}
+
+interface Projectile {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  gravity: number
+  displayY?: number
+}
+
+interface BackgroundElement {
+  x: number
+  y: number
+  emoji: string
+  type: 'grass' | 'cloud' | 'animal'
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [gameState, setGameState] = useState<GameState>('ready')
+  const [lastScore, setLastScore] = useState<number>(0)
+  const [bestScore, setBestScore] = useState<number>(0)
+  const animationFrameRef = useRef<number>(0)
+  const scrollOffsetRef = useRef<number>(0)
+  const projectileRef = useRef<Projectile | null>(null)
+  const backgroundElementsRef = useRef<BackgroundElement[]>([])
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const [audioInitialized, setAudioInitialized] = useState<boolean>(false)
+  const wineMonkeyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [wineMonkeyQuote, setWineMonkeyQuote] = useState<string>('')
+  const rubyMonkeyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [rubyMonkeyQuote, setRubyMonkeyQuote] = useState<string>('')
+  const diamondMonkeyTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [diamondMonkeyQuote, setDiamondMonkeyQuote] = useState<string>('')
+  const sapphireDuoTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const [sapphireDuoQuote, setSapphireDuoQuote] = useState<string>('')
+  const [isMuted, setIsMuted] = useState<boolean>(false)
+  const [language, setLanguage] = useState<Language>('en')
+  const wineMonkeyAnimationRef = useRef<number>(0)
+  const sapphireDuoAnimationRef = useRef<number>(0)
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  const poopARef = useRef<PoopState>({
+    angle: 0,
+    speed: 0.08, // Fixed speed
+    baseRadius: 80, // Larger size
+    amplitude: 40  // Larger amplitude
+  })
+  const poopBRef = useRef<PoopState>({
+    angle: 0,
+    speed: 0.06, // Fixed speed (slightly different for variation)
+    baseRadius: 80, // Larger size
+    amplitude: 40  // Larger amplitude
+  })
+
+      // Helper function to get translated text
+  const t = (key: keyof typeof translations.en): string => {
+    return translations[language][key] as string
+  }
+
+  // Helper function to get translated arrays
+  const tArray = (key: keyof typeof translations.en): string[] => {
+    return translations[language][key] as string[]
+  }
+
+  useEffect(() => {
+    // Load best score and language from localStorage on mount
+    const savedBestScore = localStorage.getItem('poopGameBestScore')
+    if (savedBestScore) {
+      setBestScore(parseInt(savedBestScore, 10))
+    }
+
+    const savedLanguage = localStorage.getItem('poopGameLanguage') as Language
+    if (savedLanguage && (savedLanguage === 'en' || savedLanguage === 'ja')) {
+      setLanguage(savedLanguage)
+    }
+
+    // Initialize background elements
+    initializeBackground()
+
+    // Load mute state from localStorage
+    const savedMuteState = localStorage.getItem('poopGameMuted')
+    if (savedMuteState) {
+      setIsMuted(savedMuteState === 'true')
+    }
+
+    // Initialize audio
+    audioRef.current = new Audio('/bgm/sergio_magic.mp3')
+    audioRef.current.loop = true
+    audioRef.current.volume = savedMuteState === 'true' ? 0 : 0.5
+
+    // Try to start playing immediately (will be blocked by autoplay policy)
+    const playAudio = async () => {
+      if (!audioRef.current) return
+      try {
+        audioRef.current.currentTime = 0
+        await audioRef.current.play()
+        setAudioInitialized(true)
+        console.log('Background music started playing automatically')
+      } catch (error) {
+        console.log('Audio autoplay blocked, will start on user interaction:', error)
+        // Try again after a short delay
+        setTimeout(() => {
+          if (audioRef.current && !audioInitialized) {
+            audioRef.current.play().then(() => {
+              setAudioInitialized(true)
+              console.log('Background music started playing on retry')
+            }).catch(() => {
+              console.log('Audio still blocked, waiting for user interaction')
+            })
+          }
+        }, 1000)
+      }
+    }
+    playAudio()
+
+    // Cleanup function to stop audio when component unmounts or user navigates away
+    const handleBeforeUnload = () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.hidden && audioRef.current) {
+        audioRef.current.pause()
+      } else if (!document.hidden && audioRef.current && audioInitialized) {
+        audioRef.current.play().catch(console.log)
+      }
+    }
+
+    // Add event listeners for cleanup
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // Cleanup function
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current.currentTime = 0
+      }
+      if (wineMonkeyTimeoutRef.current) {
+        clearTimeout(wineMonkeyTimeoutRef.current)
+      }
+      if (rubyMonkeyTimeoutRef.current) {
+        clearTimeout(rubyMonkeyTimeoutRef.current)
+      }
+      if (diamondMonkeyTimeoutRef.current) {
+        clearTimeout(diamondMonkeyTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  const initializeBackground = () => {
+    const elements: BackgroundElement[] = []
+
+    // Add grass elements
+    for (let i = 0; i < 50; i++) {
+      elements.push({
+        x: i * 100 + Math.random() * 50,
+        y: window.innerHeight - 50 + Math.random() * 30,
+        emoji: '🌿',
+        type: 'grass'
+      })
+    }
+
+    // Add clouds
+    for (let i = 0; i < 20; i++) {
+      elements.push({
+        x: i * 200 + Math.random() * 100,
+        y: 50 + Math.random() * 100,
+        emoji: '☁️',
+        type: 'cloud'
+      })
+    }
+
+    // Add random animals
+    const animals = ['🐇', '🐤', '🐮']
+    for (let i = 0; i < 15; i++) {
+      elements.push({
+        x: i * 300 + Math.random() * 200,
+        y: window.innerHeight - 80 + Math.random() * 20,
+        emoji: animals[Math.floor(Math.random() * animals.length)],
+        type: 'animal'
+      })
+    }
+
+    backgroundElementsRef.current = elements
+  }
+
+  const triggerWineMonkeyScene = () => {
+    const quotes = tArray('wineMonkeyLines')
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
+    setWineMonkeyQuote(randomQuote)
+
+    // Lower background music volume (only if not muted)
+    if (audioRef.current && !isMuted) {
+      audioRef.current.volume = 0.2
+    }
+
+    setGameState('wine-monkey')
+    wineMonkeyAnimationRef.current = 0 // Reset animation
+
+    // Return to result after 5 seconds
+    wineMonkeyTimeoutRef.current = setTimeout(() => {
+      // Restore background music volume (only if not muted)
+      if (audioRef.current && !isMuted) {
+        audioRef.current.volume = 0.5
+      }
+      setGameState('result')
+      setWineMonkeyQuote('')
+    }, 5000)
+  }
+
+  const triggerRubyMonkeyScene = () => {
+    const quotes = tArray('rubyMonkeyLines')
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
+    setRubyMonkeyQuote(randomQuote)
+
+    // Lower background music volume (only if not muted)
+    if (audioRef.current && !isMuted) {
+      audioRef.current.volume = 0.2
+    }
+
+    setGameState('ruby-monkey')
+
+    // Return to result after 5 seconds
+    rubyMonkeyTimeoutRef.current = setTimeout(() => {
+      // Restore background music volume (only if not muted)
+      if (audioRef.current && !isMuted) {
+        audioRef.current.volume = 0.5
+      }
+              setGameState('result')
+        setRubyMonkeyQuote('')
+      }, 5000)
+  }
+
+  const triggerDiamondMonkeyScene = () => {
+    const quotes = tArray('diamondMonkeyLines')
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
+    setDiamondMonkeyQuote(randomQuote)
+
+    // Lower background music volume (only if not muted)
+    if (audioRef.current && !isMuted) {
+      audioRef.current.volume = 0.2
+    }
+
+    setGameState('diamond-monkey')
+
+    // Return to result after 6 seconds (longer for diamond scene)
+    diamondMonkeyTimeoutRef.current = setTimeout(() => {
+      // Restore background music volume (only if not muted)
+      if (audioRef.current && !isMuted) {
+        audioRef.current.volume = 0.5
+      }
+      setGameState('result')
+      setDiamondMonkeyQuote('')
+    }, 6000)
+  }
+
+  const triggerSapphireDuoScene = () => {
+    const quotes = tArray('sapphireDuoLines')
+    const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
+    setSapphireDuoQuote(randomQuote)
+
+    // Lower background music volume (only if not muted)
+    if (audioRef.current && !isMuted) {
+      audioRef.current.volume = 0.2
+    }
+
+    setGameState('sapphire-duo')
+    sapphireDuoAnimationRef.current = 0 // Reset animation
+
+    // Return to result after 5 seconds
+    sapphireDuoTimeoutRef.current = setTimeout(() => {
+      // Restore background music volume (only if not muted)
+      if (audioRef.current && !isMuted) {
+        audioRef.current.volume = 0.5
+      }
+      setGameState('result')
+      setSapphireDuoQuote('')
+    }, 5000)
+  }
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+        // Set canvas size to viewport
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+      drawGame()
+    }
+
+        const animate = () => {
+      if (gameState === 'playing') {
+        // Update angles
+        poopARef.current.angle += poopARef.current.speed
+        poopBRef.current.angle += poopBRef.current.speed
+      } else if (gameState === 'wine-monkey') {
+        // Update wine monkey animation
+        wineMonkeyAnimationRef.current += 0.02
+      } else if (gameState === 'sapphire-duo') {
+        // Update sapphire duo animation
+        sapphireDuoAnimationRef.current += 0.02
+      } else if (gameState === 'flying' && projectileRef.current) {
+        // Update projectile physics
+        const projectile = projectileRef.current
+        projectile.x += projectile.vx
+        projectile.y += projectile.vy
+        projectile.vy += projectile.gravity
+
+        // Keep projectile within screen bounds (top boundary) - visual only, don't affect physics
+        const canvas = canvasRef.current
+        let displayY = projectile.y
+        if (canvas && projectile.y < 50) {
+          displayY = 50 // Display at least 50px from top, but keep real physics
+        }
+
+        // Store display position for rendering (but keep real physics for distance calculation)
+        projectile.displayY = displayY
+
+        // Update scroll offset to follow projectile
+        if (canvas) {
+          const targetScroll = Math.max(0, projectile.x - canvas.width / 3)
+          scrollOffsetRef.current = targetScroll
+
+                    // Check if projectile has landed
+          if (projectile.y >= canvas.height - 100) {
+            // Calculate final distance
+            const distance = Math.round(projectile.x / 10) // Convert pixels to meters
+            setLastScore(distance)
+
+            // Update best score
+            if (distance > bestScore) {
+              setBestScore(distance)
+              localStorage.setItem('poopGameBestScore', distance.toString())
+            }
+
+            // Check for special scenes
+            if (distance >= 250 && distance <= 300) {
+              triggerWineMonkeyScene()
+            } else if (distance >= 700 && distance <= 749) {
+              triggerSapphireDuoScene()
+            } else if (distance >= 750 && distance <= 800) {
+              triggerRubyMonkeyScene()
+            } else if (distance > 800) {
+              triggerDiamondMonkeyScene()
+            } else {
+              setGameState('result')
+            }
+            projectileRef.current = null
+          }
+        }
+      }
+
+      drawGame()
+      animationFrameRef.current = requestAnimationFrame(animate)
+    }
+
+    const drawGame = () => {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      // Draw sky background
+      const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height)
+      gradient.addColorStop(0, '#87CEEB') // Sky blue
+      gradient.addColorStop(0.7, '#FDF1D4') // Light beige
+      gradient.addColorStop(1, '#90EE90') // Light green
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+
+      // Draw background elements with scroll offset
+      drawBackground(ctx, canvas.width, canvas.height)
+
+      // Draw state-specific content
+      if (gameState === 'ready') {
+        drawReadyState(ctx, canvas.width, canvas.height)
+      } else if (gameState === 'playing') {
+        drawPlayingState(ctx, canvas.width, canvas.height)
+      } else if (gameState === 'flying') {
+        drawFlyingState(ctx, canvas.width, canvas.height)
+      } else if (gameState === 'wine-monkey') {
+        drawWineMonkeyState(ctx, canvas.width, canvas.height)
+      } else if (gameState === 'sapphire-duo') {
+        drawSapphireDuoState(ctx, canvas.width, canvas.height)
+      } else if (gameState === 'ruby-monkey') {
+        drawRubyMonkeyState(ctx, canvas.width, canvas.height)
+      } else if (gameState === 'diamond-monkey') {
+        drawDiamondMonkeyState(ctx, canvas.width, canvas.height)
+      } else if (gameState === 'result') {
+        drawResultState(ctx, canvas.width, canvas.height)
+      }
+    }
+
+    const drawBackground = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      ctx.font = '24px Arial'
+      backgroundElementsRef.current.forEach(element => {
+        const x = element.x - scrollOffsetRef.current
+        // Only draw elements that are visible on screen
+        if (x > -50 && x < width + 50) {
+          ctx.fillText(element.emoji, x, element.y)
+        }
+      })
+    }
+
+        const         drawReadyState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      // Draw artistic title
+      ctx.fillStyle = '#8B4513'
+      ctx.font = 'bold 36px serif'
+      ctx.textAlign = 'center'
+      ctx.fillText(t('title'), width / 2, height / 2 - 60)
+
+      ctx.fillStyle = '#666'
+      ctx.font = 'italic 20px serif'
+      ctx.fillText(t('subtitle'), width / 2, height / 2 - 20)
+
+      ctx.fillStyle = '#333'
+      ctx.font = '16px Arial'
+      ctx.fillText(t('start'), width / 2, height / 2 + 30)
+    }
+
+        const createRainbowGradient = (ctx: CanvasRenderingContext2D, x: number, y: number, radius: number) => {
+      const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius)
+      gradient.addColorStop(0, '#ff0000') // Red
+      gradient.addColorStop(0.16, '#ff8000') // Orange
+      gradient.addColorStop(0.33, '#ffff00') // Yellow
+      gradient.addColorStop(0.5, '#00ff00') // Green
+      gradient.addColorStop(0.66, '#0080ff') // Blue
+      gradient.addColorStop(0.83, '#8000ff') // Indigo
+      gradient.addColorStop(1, '#ff00ff') // Violet
+      return gradient
+    }
+
+    const drawPlayingState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      // Calculate animated radii
+      const poopA = poopARef.current
+      const poopB = poopBRef.current
+      const radiusA = poopA.baseRadius + poopA.amplitude * Math.sin(poopA.angle)
+      const radiusB = poopB.baseRadius + poopB.amplitude * Math.sin(poopB.angle)
+
+            // Calculate overlap area
+      const overlapArea = calculateCircleOverlapArea(250, height / 2, radiusA, 400, height / 2, radiusB)
+
+      // Draw poopA (left circle - outline only)
+      ctx.strokeStyle = '#8B4513'
+      ctx.lineWidth = 6
+      ctx.shadowBlur = 0
+      ctx.beginPath()
+      ctx.arc(250 - scrollOffsetRef.current, height / 2, radiusA, 0, Math.PI * 2)
+      ctx.stroke()
+
+      // Draw poopB (right circle - outline only)
+      ctx.strokeStyle = '#654321'
+      ctx.lineWidth = 6
+      ctx.shadowBlur = 0
+      ctx.beginPath()
+      ctx.arc(400 - scrollOffsetRef.current, height / 2, radiusB, 0, Math.PI * 2)
+      ctx.stroke()
+
+      // Reset shadow for text
+      ctx.shadowBlur = 0
+
+      // Draw playing text
+      ctx.fillStyle = '#333'
+      ctx.font = '24px Arial'
+      ctx.textAlign = 'center'
+              ctx.fillText(t('playing'), width / 2, height / 4)
+
+            ctx.fillStyle = '#333'
+      ctx.font = '16px Arial'
+              ctx.fillText(t('launch'), width / 2, height * 3 / 4)
+    }
+
+            const drawFlyingState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      // Draw projectile if it exists
+      if (projectileRef.current) {
+        const projectile = projectileRef.current
+        const x = projectile.x - scrollOffsetRef.current
+        const y = projectile.displayY !== undefined ? projectile.displayY : projectile.y // Use display position if available
+
+        // Normal poop
+        ctx.font = '32px Arial'
+        ctx.textAlign = 'center'
+        ctx.shadowBlur = 0
+        ctx.fillText('💩', x, y)
+
+        // Normal trail
+        ctx.strokeStyle = 'rgba(139, 69, 19, 0.3)'
+        ctx.lineWidth = 3
+        ctx.shadowBlur = 0
+
+        // Draw trajectory trail
+        ctx.beginPath()
+        ctx.moveTo(x - projectile.vx * 5, y - projectile.vy * 5)
+        ctx.lineTo(x, y)
+        ctx.stroke()
+
+        // Reset shadow
+        ctx.shadowBlur = 0
+      }
+
+      // Draw distance indicator
+      ctx.fillStyle = '#333'
+      ctx.font = '18px Arial'
+      ctx.textAlign = 'left'
+      const currentDistance = projectileRef.current ? Math.round(projectileRef.current.x / 10) : 0
+      ctx.fillText(`${t('distance')}: ${currentDistance}m`, 10, 30)
+    }
+
+        const drawWineMonkeyState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      // Draw elegant background
+      const gradient = ctx.createLinearGradient(0, 0, 0, height)
+      gradient.addColorStop(0, '#2C1810')
+      gradient.addColorStop(1, '#8B4513')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, width, height)
+
+      // Animation progress (0 to 1 over 5 seconds)
+      const animTime = wineMonkeyAnimationRef.current
+      const slideProgress = Math.min(animTime * 2, 1) // Slide in over first 0.5 seconds
+      const slideOutProgress = Math.max(0, (animTime - 4.5) * 2) // Slide out in last 0.5 seconds
+
+      // Calculate monkey position (slide in from left, slide out to left)
+      let monkeyX = width / 2 - 100
+      if (slideProgress < 1) {
+        monkeyX = -200 + (width / 2 + 100) * slideProgress
+      } else if (slideOutProgress > 0) {
+        monkeyX = (width / 2 - 100) - (width / 2 + 100) * slideOutProgress
+      }
+
+      // Add subtle head tilt animation
+      const headTilt = Math.sin(animTime * 3) * 0.1
+
+      ctx.save()
+      ctx.translate(monkeyX + 60, height / 2 - 60)
+      ctx.rotate(headTilt)
+
+      // Draw classy monkey character with animation
+      ctx.font = '120px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText('🐒', 0, 60)
+      ctx.restore()
+
+      // Draw wine bottle and glass (only when monkey is in position)
+      if (slideProgress >= 1 && slideOutProgress === 0) {
+        ctx.font = '60px Arial'
+        ctx.textAlign = 'center'
+
+        // Animate pouring motion
+        const pourAnimation = Math.sin(animTime * 2) * 0.5 + 0.5
+        ctx.fillText('🍷', width / 2, height / 2 + pourAnimation * 10)
+        ctx.fillText('🍾', width / 2 + 80, height / 2 - 20 - pourAnimation * 5)
+      }
+
+      // Draw speech bubble background
+      const bubbleX = width / 2
+      const bubbleY = height / 2 - 120
+      const bubbleWidth = Math.min(width - 40, 600)
+      const bubbleHeight = 80
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)'
+      ctx.strokeStyle = '#8B4513'
+      ctx.lineWidth = 3
+
+      // Rounded rectangle for speech bubble
+      ctx.beginPath()
+      ctx.roundRect(bubbleX - bubbleWidth/2, bubbleY - bubbleHeight/2, bubbleWidth, bubbleHeight, 20)
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw speech bubble tail
+      ctx.beginPath()
+      ctx.moveTo(bubbleX - 20, bubbleY + bubbleHeight/2)
+      ctx.lineTo(bubbleX, bubbleY + bubbleHeight/2 + 20)
+      ctx.lineTo(bubbleX + 20, bubbleY + bubbleHeight/2)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw the quote
+      ctx.fillStyle = '#2C1810'
+      ctx.font = 'italic 18px serif'
+      ctx.textAlign = 'center'
+
+      // Word wrap the quote
+      const words = wineMonkeyQuote.split(' ')
+      const maxWidth = bubbleWidth - 40
+      let line = ''
+      let y = bubbleY - 10
+
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' '
+        const metrics = ctx.measureText(testLine)
+        const testWidth = metrics.width
+
+        if (testWidth > maxWidth && n > 0) {
+          ctx.fillText(line, bubbleX, y)
+          line = words[n] + ' '
+          y += 25
+        } else {
+          line = testLine
+        }
+      }
+      ctx.fillText(line, bubbleX, y)
+
+      // Draw title
+      ctx.fillStyle = '#FFD700'
+      ctx.font = 'bold 24px serif'
+      ctx.fillText(t('wineMonkeyTitle'), width / 2, height / 2 + 100)
+    }
+
+    const drawSapphireDuoState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      // Draw elegant sapphire background
+      const gradient = ctx.createLinearGradient(0, 0, 0, height)
+      gradient.addColorStop(0, '#0F1B3C')
+      gradient.addColorStop(0.5, '#1E3A8A')
+      gradient.addColorStop(1, '#3B82F6')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, width, height)
+
+      // Animation progress
+      const animTime = sapphireDuoAnimationRef.current
+      const slideProgressMonkey = Math.min(animTime * 2, 1) // Monkey slides in from left
+      const slideProgressCow = Math.min((animTime - 0.5) * 2, 1) // Cow slides in from right (delayed)
+      const slideOutProgress = Math.max(0, (animTime - 4) * 2) // Both slide out
+
+      // Calculate monkey position (left side)
+      let monkeyX = width / 4
+      if (slideProgressMonkey < 1) {
+        monkeyX = -150 + (width / 4 + 150) * slideProgressMonkey
+      } else if (slideOutProgress > 0) {
+        monkeyX = (width / 4) - (width / 4 + 150) * slideOutProgress
+      }
+
+      // Calculate cow position (right side)
+      let cowX = (width * 3) / 4
+      if (slideProgressCow < 1) {
+        cowX = width + 150 - (width / 4 + 150) * slideProgressCow
+      } else if (slideOutProgress > 0) {
+        cowX = ((width * 3) / 4) + (width / 4 + 150) * slideOutProgress
+      }
+
+      // Add subtle head movements
+      const monkeyBob = Math.sin(animTime * 2) * 0.05
+      const cowBob = Math.sin(animTime * 2.5) * 0.05
+
+      // Draw monkey (left side)
+      if (slideProgressMonkey > 0) {
+        ctx.save()
+        ctx.translate(monkeyX, height / 2 + monkeyBob * 20)
+        ctx.font = '120px Arial'
+        ctx.textAlign = 'center'
+        ctx.fillText('🐒', 0, 0)
+        ctx.restore()
+      }
+
+      // Draw cow (right side)
+      if (slideProgressCow > 0) {
+        ctx.save()
+        ctx.translate(cowX, height / 2 + cowBob * 20)
+        ctx.font = '120px Arial'
+        ctx.textAlign = 'center'
+        ctx.fillText('🐄', 0, 0)
+        ctx.restore()
+      }
+
+      // Draw sapphire in center (when both are present)
+      if (slideProgressMonkey >= 1 && slideProgressCow >= 1 && slideOutProgress === 0) {
+        const sapphirePulse = Math.sin(animTime * 4) * 0.1 + 1
+        ctx.save()
+        ctx.translate(width / 2, height / 2 - 50)
+        ctx.scale(sapphirePulse, sapphirePulse)
+        ctx.font = '80px Arial'
+        ctx.textAlign = 'center'
+        ctx.fillText('💎', 0, 0)
+        ctx.restore()
+
+        // Add sparkles around sapphire
+        ctx.fillStyle = 'rgba(59, 130, 246, 0.8)'
+        for (let i = 0; i < 8; i++) {
+          const angle = (i * Math.PI * 2) / 8 + animTime
+          const x = width / 2 + Math.cos(angle) * 60
+          const y = height / 2 - 50 + Math.sin(angle) * 60
+          ctx.beginPath()
+          ctx.arc(x, y, 3, 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+
+      // Draw speech bubble
+      const bubbleX = width / 2
+      const bubbleY = height / 2 - 140
+      const bubbleWidth = Math.min(width - 40, 600)
+      const bubbleHeight = 80
+
+      ctx.fillStyle = 'rgba(219, 234, 254, 0.95)'
+      ctx.strokeStyle = '#1E3A8A'
+      ctx.lineWidth = 3
+
+      ctx.beginPath()
+      ctx.roundRect(bubbleX - bubbleWidth/2, bubbleY - bubbleHeight/2, bubbleWidth, bubbleHeight, 20)
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw speech bubble tail
+      ctx.beginPath()
+      ctx.moveTo(bubbleX - 20, bubbleY + bubbleHeight/2)
+      ctx.lineTo(bubbleX, bubbleY + bubbleHeight/2 + 20)
+      ctx.lineTo(bubbleX + 20, bubbleY + bubbleHeight/2)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw the quote
+      ctx.fillStyle = '#1E3A8A'
+      ctx.font = 'italic 18px serif'
+      ctx.textAlign = 'center'
+
+      const words = sapphireDuoQuote.split(' ')
+      const maxWidth = bubbleWidth - 40
+      let line = ''
+      let y = bubbleY - 10
+
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' '
+        const metrics = ctx.measureText(testLine)
+        const testWidth = metrics.width
+
+        if (testWidth > maxWidth && n > 0) {
+          ctx.fillText(line, bubbleX, y)
+          line = words[n] + ' '
+          y += 25
+        } else {
+          line = testLine
+        }
+      }
+      ctx.fillText(line, bubbleX, y)
+
+      // Draw title
+      ctx.fillStyle = '#3B82F6'
+      ctx.font = 'bold 26px serif'
+      ctx.fillText(t('sapphireDuoTitle'), width / 2, height / 2 + 120)
+    }
+
+    const drawRubyMonkeyState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      // Draw elegant ruby background
+      const gradient = ctx.createLinearGradient(0, 0, 0, height)
+      gradient.addColorStop(0, '#4A0E0E')
+      gradient.addColorStop(0.5, '#8B0000')
+      gradient.addColorStop(1, '#DC143C')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, width, height)
+
+      // Add sparkle effect
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'
+      for (let i = 0; i < 20; i++) {
+        const x = Math.random() * width
+        const y = Math.random() * height
+        const size = Math.random() * 3 + 1
+        ctx.beginPath()
+        ctx.arc(x, y, size, 0, Math.PI * 2)
+        ctx.fill()
+      }
+
+      // Draw majestic monkey character
+      ctx.font = '140px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText('🐒', width / 2 - 120, height / 2 + 20)
+
+      // Draw ruby gem
+      ctx.font = '80px Arial'
+      ctx.fillText('💎', width / 2 + 60, height / 2 - 30)
+
+      // Draw crown for majesty
+      ctx.font = '60px Arial'
+      ctx.fillText('👑', width / 2 - 120, height / 2 - 80)
+
+      // Draw speech bubble background
+      const bubbleX = width / 2
+      const bubbleY = height / 2 - 140
+      const bubbleWidth = Math.min(width - 40, 650)
+      const bubbleHeight = 90
+
+      ctx.fillStyle = 'rgba(255, 215, 0, 0.95)'
+      ctx.strokeStyle = '#8B0000'
+      ctx.lineWidth = 4
+
+      // Rounded rectangle for speech bubble
+      ctx.beginPath()
+      ctx.roundRect(bubbleX - bubbleWidth/2, bubbleY - bubbleHeight/2, bubbleWidth, bubbleHeight, 25)
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw speech bubble tail
+      ctx.beginPath()
+      ctx.moveTo(bubbleX - 30, bubbleY + bubbleHeight/2)
+      ctx.lineTo(bubbleX, bubbleY + bubbleHeight/2 + 25)
+      ctx.lineTo(bubbleX + 30, bubbleY + bubbleHeight/2)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw the quote
+      ctx.fillStyle = '#8B0000'
+      ctx.font = 'bold 20px serif'
+      ctx.textAlign = 'center'
+
+      // Word wrap the quote
+      const words = rubyMonkeyQuote.split(' ')
+      const maxWidth = bubbleWidth - 50
+      let line = ''
+      let y = bubbleY - 15
+
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' '
+        const metrics = ctx.measureText(testLine)
+        const testWidth = metrics.width
+
+        if (testWidth > maxWidth && n > 0) {
+          ctx.fillText(line, bubbleX, y)
+          line = words[n] + ' '
+          y += 28
+        } else {
+          line = testLine
+        }
+      }
+      ctx.fillText(line, bubbleX, y)
+
+      // Draw title
+      ctx.fillStyle = '#FFD700'
+      ctx.font = 'bold 28px serif'
+      ctx.fillText(t('rubyMonkeyTitle'), width / 2, height / 2 + 120)
+    }
+
+    const drawDiamondMonkeyState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      // Draw magnificent diamond background
+      const gradient = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height))
+      gradient.addColorStop(0, '#E6E6FA')
+      gradient.addColorStop(0.3, '#9370DB')
+      gradient.addColorStop(0.6, '#4B0082')
+      gradient.addColorStop(1, '#191970')
+      ctx.fillStyle = gradient
+      ctx.fillRect(0, 0, width, height)
+
+      // Add intense sparkle effect
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'
+      for (let i = 0; i < 50; i++) {
+        const x = Math.random() * width
+        const y = Math.random() * height
+        const size = Math.random() * 5 + 2
+        const opacity = Math.random() * 0.8 + 0.2
+        ctx.globalAlpha = opacity
+        ctx.beginPath()
+        ctx.arc(x, y, size, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      ctx.globalAlpha = 1
+
+      // Add diamond rays
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)'
+      ctx.lineWidth = 2
+      for (let i = 0; i < 12; i++) {
+        const angle = (i * Math.PI * 2) / 12
+        const startX = width / 2 + Math.cos(angle) * 100
+        const startY = height / 2 + Math.sin(angle) * 100
+        const endX = width / 2 + Math.cos(angle) * 300
+        const endY = height / 2 + Math.sin(angle) * 300
+
+        ctx.beginPath()
+        ctx.moveTo(startX, startY)
+        ctx.lineTo(endX, endY)
+        ctx.stroke()
+      }
+
+      // Draw supreme monkey character
+      ctx.font = '160px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText('🐒', width / 2 - 140, height / 2 + 30)
+
+      // Draw multiple diamonds for ultimate luxury
+      ctx.font = '100px Arial'
+      ctx.fillText('💎', width / 2 + 80, height / 2 - 40)
+      ctx.font = '60px Arial'
+      ctx.fillText('💎', width / 2 + 140, height / 2 + 20)
+      ctx.fillText('💎', width / 2 + 40, height / 2 + 60)
+
+      // Draw imperial crown
+      ctx.font = '80px Arial'
+      ctx.fillText('👑', width / 2 - 140, height / 2 - 100)
+
+      // Draw royal scepter
+      ctx.font = '50px Arial'
+      ctx.fillText('🔱', width / 2 - 200, height / 2)
+
+      // Draw speech bubble background (larger and more luxurious)
+      const bubbleX = width / 2
+      const bubbleY = height / 2 - 160
+      const bubbleWidth = Math.min(width - 30, 750)
+      const bubbleHeight = 100
+
+      // Gradient bubble background
+      const bubbleGradient = ctx.createLinearGradient(bubbleX - bubbleWidth/2, bubbleY - bubbleHeight/2, bubbleX + bubbleWidth/2, bubbleY + bubbleHeight/2)
+      bubbleGradient.addColorStop(0, 'rgba(255, 215, 0, 0.98)')
+      bubbleGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.98)')
+      bubbleGradient.addColorStop(1, 'rgba(255, 215, 0, 0.98)')
+      ctx.fillStyle = bubbleGradient
+
+      ctx.strokeStyle = '#4B0082'
+      ctx.lineWidth = 5
+
+      // Rounded rectangle for speech bubble
+      ctx.beginPath()
+      ctx.roundRect(bubbleX - bubbleWidth/2, bubbleY - bubbleHeight/2, bubbleWidth, bubbleHeight, 30)
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw speech bubble tail
+      ctx.beginPath()
+      ctx.moveTo(bubbleX - 40, bubbleY + bubbleHeight/2)
+      ctx.lineTo(bubbleX, bubbleY + bubbleHeight/2 + 30)
+      ctx.lineTo(bubbleX + 40, bubbleY + bubbleHeight/2)
+      ctx.closePath()
+      ctx.fill()
+      ctx.stroke()
+
+      // Draw the quote with elegant styling
+      ctx.fillStyle = '#4B0082'
+      ctx.font = 'bold 22px serif'
+      ctx.textAlign = 'center'
+
+      // Word wrap the quote
+      const words = diamondMonkeyQuote.split(' ')
+      const maxWidth = bubbleWidth - 60
+      let line = ''
+      let y = bubbleY - 20
+
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' '
+        const metrics = ctx.measureText(testLine)
+        const testWidth = metrics.width
+
+        if (testWidth > maxWidth && n > 0) {
+          ctx.fillText(line, bubbleX, y)
+          line = words[n] + ' '
+          y += 30
+        } else {
+          line = testLine
+        }
+      }
+      ctx.fillText(line, bubbleX, y)
+
+      // Draw title with shadow effect
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
+      ctx.shadowBlur = 10
+      ctx.shadowOffsetX = 3
+      ctx.shadowOffsetY = 3
+
+      ctx.fillStyle = '#FFD700'
+      ctx.font = 'bold 32px serif'
+      ctx.fillText(t('diamondMonkeyTitle'), width / 2, height / 2 + 140)
+
+      // Reset shadow
+      ctx.shadowColor = 'transparent'
+      ctx.shadowBlur = 0
+      ctx.shadowOffsetX = 0
+      ctx.shadowOffsetY = 0
+    }
+
+            const getScoreMessage = (score: number) => {
+      if (score >= 1000) return { text: '🏆 PERFECT! 🏆', color: '#FF1493' }
+      if (score >= 950) return { text: '💎 LEGENDARY! 💎', color: '#9932CC' }
+      if (score >= 900) return { text: '⭐ AMAZING! ⭐', color: '#FF4500' }
+      if (score >= 800) return { text: '🔥 EXCELLENT! 🔥', color: '#FF6347' }
+      if (score >= 700) return { text: '🌟 GREAT! 🌟', color: '#FFD700' }
+      if (score >= 600) return { text: '👍 GOOD! 👍', color: '#32CD32' }
+      return { text: t('results'), color: '#333' }
+    }
+
+    const drawResultState = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+      const scoreMessage = getScoreMessage(lastScore)
+
+      // Draw result text with score-based message
+      ctx.fillStyle = scoreMessage.color
+      ctx.font = 'bold 28px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText(scoreMessage.text, width / 2, height / 2 - 80)
+
+      ctx.fillStyle = '#333'
+      ctx.font = '20px Arial'
+                      ctx.fillText(`${t('yourScore')}: ${lastScore}m`, width / 2, height / 2 - 30)
+        ctx.fillText(`${t('bestScore')}: ${bestScore}m`, width / 2, height / 2 + 10)
+
+      // Add achievement messages
+      if (lastScore >= 1000) {
+        ctx.fillStyle = '#FF1493'
+        ctx.font = '16px Arial'
+        ctx.fillText(translations[language].achievements.legendary, width / 2, height / 2 + 40)
+      } else if (lastScore >= 950) {
+        ctx.fillStyle = '#9932CC'
+        ctx.font = '16px Arial'
+        ctx.fillText(translations[language].achievements.legendary, width / 2, height / 2 + 40)
+      } else if (lastScore >= 900) {
+        ctx.fillStyle = '#FF4500'
+        ctx.font = '16px Arial'
+        ctx.fillText(translations[language].achievements.amazing, width / 2, height / 2 + 40)
+      } else if (lastScore >= 800) {
+        ctx.fillStyle = '#FF6347'
+        ctx.font = '16px Arial'
+        ctx.fillText(translations[language].achievements.excellent, width / 2, height / 2 + 40)
+      } else if (lastScore >= 700) {
+        ctx.fillStyle = '#FFD700'
+        ctx.font = '16px Arial'
+        ctx.fillText(translations[language].achievements.great, width / 2, height / 2 + 40)
+      } else if (lastScore >= 600) {
+        ctx.fillStyle = '#32CD32'
+        ctx.font = '16px Arial'
+        ctx.fillText(translations[language].achievements.good, width / 2, height / 2 + 40)
+      }
+
+      ctx.fillStyle = '#333'
+      ctx.font = '16px Arial'
+      ctx.fillText(t('restart'), width / 2, height / 2 + 70)
+    }
+
+        const calculateCircleOverlapArea = (x1: number, y1: number, r1: number, x2: number, y2: number, r2: number) => {
+      const d = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2))
+
+      // No overlap
+      if (d >= r1 + r2) return 0
+
+      // One circle completely inside the other
+      if (d <= Math.abs(r1 - r2)) {
+        const smallerRadius = Math.min(r1, r2)
+        return Math.PI * smallerRadius * smallerRadius
+      }
+
+      // Partial overlap - calculate intersection area
+      const a = r1 * r1
+      const b = r2 * r2
+      const x = (a - b + d * d) / (2 * d)
+      const z = x - d
+      const y = Math.sqrt(a - x * x)
+
+      const area = a * Math.acos(x / r1) + b * Math.acos(-z / r2) - y * d
+      return area
+    }
+
+                const launchProjectile = () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+
+      // Get current radii
+      const poopA = poopARef.current
+      const poopB = poopBRef.current
+      const rA = poopA.baseRadius + poopA.amplitude * Math.sin(poopA.angle)
+      const rB = poopB.baseRadius + poopB.amplitude * Math.sin(poopB.angle)
+
+      // Calculate circle positions (updated positions)
+      const centerAX = 250
+      const centerAY = canvas.height / 2
+      const centerBX = 400
+      const centerBY = canvas.height / 2
+
+      // Calculate overlap area
+      const overlapArea = calculateCircleOverlapArea(centerAX, centerAY, rA, centerBX, centerBY, rB)
+
+                              // Base launch power on actual overlap area with balanced difficulty scaling
+      // Scale the area for achievable 750m, then progressively harder
+      const areaPower = Math.sqrt(overlapArea) / 90 // Slightly easier base scaling
+      let launchPower = Math.max(0.3, Math.min(2.1, areaPower)) // Good range for progression
+
+      // 750m+ achievable with effort (10-20 tries)
+      if (areaPower > 1.3) { // 750m threshold - achievable
+        const excess = areaPower - 1.3
+        launchPower = 1.3 + excess * 0.28 // Good growth after 750m
+      }
+
+      // 850m+ challenging (40-50 tries)
+      if (areaPower > 1.65) { // 850m threshold
+        const excess = areaPower - 1.65
+        launchPower = 1.65 + excess * 0.15 // Steeper curve after 850m
+      }
+
+      // 950m+ very difficult (100+ tries)
+      if (areaPower > 1.9) { // 950m threshold
+        const excess = areaPower - 1.9
+        launchPower = 1.9 + excess * 0.08 // Much steeper after 950m
+      }
+
+      // 1000m extremely difficult - requires near-perfect overlap (300+ tries)
+      if (areaPower > 2.05) { // 1000m threshold
+        const excess = areaPower - 2.05
+        launchPower = 2.05 + excess * 0.02 // Very slow growth - very challenging
+      }
+
+              projectileRef.current = {
+          x: 325, // Between the two circles (updated position)
+          y: canvas.height / 2,
+          vx: launchPower * 18 + 14, // Balanced horizontal velocity
+          vy: launchPower * -11 - 6, // Balanced vertical velocity
+          gravity: 0.19, // Slightly higher gravity for moderate difficulty
+          isRainbow: false // No more rainbow mode
+        } as any
+
+      setGameState('flying')
+    }
+
+    const resetPoopSpeeds = () => {
+      poopARef.current.speed = 0.08 // Fixed speed
+      poopBRef.current.speed = 0.06 // Fixed speed (slightly different for variation)
+      poopARef.current.angle = 0
+      poopBRef.current.angle = 0
+    }
+
+    const handleCanvasClick = () => {
+      // Initialize audio on first interaction
+      if (!audioInitialized) {
+        initializeAudio()
+      }
+
+      if (gameState === 'ready') {
+        // Ensure BGM is playing when starting game
+        if (audioRef.current && audioInitialized) {
+          audioRef.current.play().catch(console.error)
+        }
+        resetPoopSpeeds()
+        scrollOffsetRef.current = 0 // Reset scroll
+        setGameState('playing')
+      } else if (gameState === 'playing') {
+        launchProjectile()
+      } else if (gameState === 'wine-monkey') {
+        // Skip wine monkey scene on click
+        if (wineMonkeyTimeoutRef.current) {
+          clearTimeout(wineMonkeyTimeoutRef.current)
+        }
+        if (audioRef.current && !isMuted) {
+          audioRef.current.volume = 0.5
+        }
+        setGameState('result')
+        setWineMonkeyQuote('')
+      } else if (gameState === 'sapphire-duo') {
+        // Skip sapphire duo scene on click
+        if (sapphireDuoTimeoutRef.current) {
+          clearTimeout(sapphireDuoTimeoutRef.current)
+        }
+        if (audioRef.current && !isMuted) {
+          audioRef.current.volume = 0.5
+        }
+        setGameState('result')
+        setSapphireDuoQuote('')
+      } else if (gameState === 'ruby-monkey') {
+        // Skip ruby monkey scene on click
+        if (rubyMonkeyTimeoutRef.current) {
+          clearTimeout(rubyMonkeyTimeoutRef.current)
+        }
+        if (audioRef.current && !isMuted) {
+          audioRef.current.volume = 0.5
+        }
+        setGameState('result')
+        setRubyMonkeyQuote('')
+      } else if (gameState === 'diamond-monkey') {
+        // Skip diamond monkey scene on click
+        if (diamondMonkeyTimeoutRef.current) {
+          clearTimeout(diamondMonkeyTimeoutRef.current)
+        }
+        if (audioRef.current && !isMuted) {
+          audioRef.current.volume = 0.5
+        }
+        setGameState('result')
+        setDiamondMonkeyQuote('')
+      }
+      // Note: flying and result states don't respond to canvas clicks
+    }
+
+    // Initial setup
+    resizeCanvas()
+    animate() // Start animation loop
+    window.addEventListener('resize', resizeCanvas)
+    canvas.addEventListener('click', handleCanvasClick)
+    canvas.addEventListener('touchstart', handleCanvasClick)
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+      window.removeEventListener('resize', resizeCanvas)
+      canvas.removeEventListener('click', handleCanvasClick)
+      canvas.removeEventListener('touchstart', handleCanvasClick)
+    }
+  }, [gameState, language])
+
+  const handleReset = () => {
+    // Initialize audio on button click too
+    if (!audioInitialized) {
+      initializeAudio()
+    }
+    // Keep BGM playing continuously - no restart needed
+
+    scrollOffsetRef.current = 0
+    projectileRef.current = null
+    setGameState('ready')
+  }
+
+  const initializeAudio = async () => {
+    if (!audioInitialized && audioRef.current) {
+      try {
+        audioRef.current.currentTime = 0
+        audioRef.current.volume = isMuted ? 0 : 0.5
+        await audioRef.current.play()
+        setAudioInitialized(true)
+        console.log('Background music started playing')
+      } catch (error) {
+        console.log('Audio autoplay blocked, will try again on next interaction:', error)
+        // Force play attempt
+        setTimeout(() => {
+          if (audioRef.current && !audioInitialized) {
+            audioRef.current.play().catch(() => {
+              console.log('Audio still blocked')
+            })
+          }
+        }, 100)
+      }
+    }
+  }
+
+    const toggleMute = () => {
+    const newMutedState = !isMuted
+    setIsMuted(newMutedState)
+    localStorage.setItem('poopGameMuted', newMutedState.toString())
+
+    if (audioRef.current) {
+      audioRef.current.volume = newMutedState ? 0 : 0.5
+    }
+  }
+
+  const toggleLanguage = () => {
+    const newLanguage: Language = language === 'en' ? 'ja' : 'en'
+    setLanguage(newLanguage)
+    localStorage.setItem('poopGameLanguage', newLanguage)
+  }
+
+  return (
+    <>
+      <canvas
+        ref={canvasRef}
+        id="gameCanvas"
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          cursor: (gameState === 'result' || gameState === 'flying') ? 'default' : 'pointer',
+          touchAction: 'manipulation',
+          pointerEvents: (gameState === 'result' || gameState === 'flying') ? 'none' : 'auto',
+          imageRendering: 'auto' // Standard canvas rendering
+        }}
+      />
+
+      {/* Language Toggle Button */}
+      <button
+        onClick={toggleLanguage}
+        style={{
+          position: 'fixed',
+          top: '20px',
+          left: '20px',
+          padding: '8px 16px',
+          borderRadius: '8px',
+          border: 'none',
+          backgroundColor: 'rgba(139, 69, 19, 0.9)',
+          color: 'white',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          cursor: 'pointer',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+          transition: 'all 0.2s ease',
+          touchAction: 'manipulation'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(101, 67, 33, 0.9)'
+          e.currentTarget.style.transform = 'scale(1.05)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(139, 69, 19, 0.9)'
+          e.currentTarget.style.transform = 'scale(1)'
+        }}
+      >
+        {language === 'en' ? '日本語' : 'EN'}
+      </button>
+
+      {/* Mute Toggle Button */}
+      <button
+        onClick={toggleMute}
+        style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          width: '60px',
+          height: '60px',
+          borderRadius: '50%',
+          border: 'none',
+          backgroundColor: 'rgba(139, 69, 19, 0.9)',
+          color: 'white',
+          fontSize: '24px',
+          cursor: 'pointer',
+          zIndex: 1000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+          transition: 'all 0.2s ease',
+          touchAction: 'manipulation'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(101, 67, 33, 0.9)'
+          e.currentTarget.style.transform = 'scale(1.1)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(139, 69, 19, 0.9)'
+          e.currentTarget.style.transform = 'scale(1)'
+        }}
+      >
+        {isMuted ? t('mute') : t('unmute')}
+      </button>
+      {gameState === 'result' && (
+        <div
+          id="resultBox"
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: '#FDF1D4',
+            border: '3px solid #8B4513',
+            borderRadius: '12px',
+            padding: '24px',
+            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.2)',
+            textAlign: 'center',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Noto Color Emoji", sans-serif',
+            zIndex: 10
+          }}
+        >
+          <div style={{ fontSize: '20px', marginBottom: '16px', color: '#333' }}>
+            💩{t('distance')}: {lastScore}m | BEST: {bestScore}m
+          </div>
+          <button
+            onClick={handleReset}
+            style={{
+              backgroundColor: '#8B4513',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              padding: '12px 24px',
+              fontSize: '16px',
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#654321'
+              e.currentTarget.style.transform = 'translateY(-1px)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#8B4513'
+              e.currentTarget.style.transform = 'translateY(0)'
+            }}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+                                        {t('tryAgain')}
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+      )}
+    </>
+  )
 }
