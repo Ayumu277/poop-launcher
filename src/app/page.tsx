@@ -28,6 +28,11 @@ interface BackgroundElement {
   type: 'grass' | 'cloud' | 'animal'
 }
 
+// Extend the ScreenOrientation interface for TypeScript
+interface ScreenOrientationWithLock extends ScreenOrientation {
+  lock(orientation: 'landscape'): Promise<void>;
+}
+
 export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [gameState, setGameState] = useState<GameState>('ready')
@@ -479,15 +484,20 @@ export default function Home() {
       const radiusA = poopA.baseRadius + poopA.amplitude * Math.sin(poopA.angle)
       const radiusB = poopB.baseRadius + poopB.amplitude * Math.sin(poopB.angle)
 
-            // Calculate overlap area
-      const overlapArea = calculateCircleOverlapArea(250, height / 2, radiusA, 400, height / 2, radiusB)
+      const centerAX = width / 2 - 75;
+      const centerAY = height / 2;
+      const centerBX = width / 2 + 75;
+      const centerBY = height / 2;
+
+      // Calculate overlap area
+      const overlapArea = calculateCircleOverlapArea(centerAX, centerAY, radiusA, centerBX, centerBY, radiusB)
 
       // Draw poopA (left circle - outline only)
       ctx.strokeStyle = '#8B4513'
       ctx.lineWidth = 6
       ctx.shadowBlur = 0
       ctx.beginPath()
-      ctx.arc(250, height / 2, radiusA, 0, Math.PI * 2)
+      ctx.arc(centerAX, centerAY, radiusA, 0, Math.PI * 2)
       ctx.stroke()
 
       // Draw poopB (right circle - outline only)
@@ -495,7 +505,7 @@ export default function Home() {
       ctx.lineWidth = 6
       ctx.shadowBlur = 0
       ctx.beginPath()
-      ctx.arc(400, height / 2, radiusB, 0, Math.PI * 2)
+      ctx.arc(centerBX, centerBY, radiusB, 0, Math.PI * 2)
       ctx.stroke()
 
       // Reset shadow for text
@@ -1096,11 +1106,14 @@ export default function Home() {
       const rA = poopA.baseRadius + poopA.amplitude * Math.sin(poopA.angle)
       const rB = poopB.baseRadius + poopB.amplitude * Math.sin(poopB.angle)
 
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+
       // Calculate circle positions (updated positions)
-      const centerAX = 250
-      const centerAY = window.innerHeight / 2
-      const centerBX = 400
-      const centerBY = window.innerHeight / 2
+      const centerAX = width / 2 - 75;
+      const centerAY = height / 2;
+      const centerBX = width / 2 + 75;
+      const centerBY = height / 2;
 
       // Calculate overlap area
       const overlapArea = calculateCircleOverlapArea(centerAX, centerAY, rA, centerBX, centerBY, rB)
@@ -1135,8 +1148,8 @@ export default function Home() {
       }
 
               projectileRef.current = {
-          x: 325, // Between the two circles
-          y: window.innerHeight / 2,
+          x: width / 2, // Between the two circles
+          y: height / 2,
           vx: launchPower * 18 + 14, // Balanced horizontal velocity
           vy: launchPower * -11 - 6, // Balanced vertical velocity
           gravity: 0.19, // Slightly higher gravity for moderate difficulty
@@ -1152,6 +1165,31 @@ export default function Home() {
       poopARef.current.angle = 0
       poopBRef.current.angle = 0
     }
+
+    const handleStartGame = async () => {
+    // On mobile, try to lock orientation to landscape
+    if (isMobile) {
+      try {
+        if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+        const orientation = screen.orientation as ScreenOrientationWithLock;
+        if (orientation && orientation.lock) {
+          await orientation.lock('landscape');
+        }
+      } catch (err) {
+        console.error(`Failed to lock orientation: ${err}`);
+      }
+    }
+
+    // Start audio on first interaction
+    initializeAudio();
+
+    // Start the game
+    resetPoopSpeeds();
+    scrollOffsetRef.current = 0;
+    setGameState('playing');
+  }
 
     const handleCanvasClick = (event: MouseEvent | TouchEvent) => {
       // Initialize audio on first interaction
@@ -1186,10 +1224,7 @@ export default function Home() {
         }
 
         // Otherwise start the game
-        // BGM continues playing (no need to restart)
-        resetPoopSpeeds()
-        scrollOffsetRef.current = 0 // Reset scroll to center view
-        setGameState('playing')
+        handleStartGame()
       } else if (gameState === 'playing') {
         launchProjectile()
       } else if (gameState === 'wine-monkey') {
@@ -1250,7 +1285,6 @@ export default function Home() {
       }, 100)
     })
     canvas.addEventListener('click', handleCanvasClick as EventListener)
-    canvas.addEventListener('touchstart', handleCanvasClick as EventListener)
 
     return () => {
       if (animationFrameRef.current) {
@@ -1259,7 +1293,6 @@ export default function Home() {
       window.removeEventListener('resize', resizeCanvas)
       window.removeEventListener('orientationchange', resizeCanvas)
       canvas.removeEventListener('click', handleCanvasClick as EventListener)
-      canvas.removeEventListener('touchstart', handleCanvasClick as EventListener)
     }
   }, [gameState, language, isMuted, isMobile, isPortrait])
 
@@ -1317,7 +1350,7 @@ export default function Home() {
           <div className="text-center p-8 bg-white bg-opacity-90 rounded-lg mx-4 max-w-sm">
             <div className="text-6xl mb-4">📱</div>
             <div className="text-xl font-bold text-gray-800 mb-2">
-              {t('rotatePhone')}
+              {t('forceRotatePhone')}
             </div>
             <div className="text-4xl animate-bounce">
               🔄

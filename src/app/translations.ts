@@ -16,6 +16,7 @@ export interface Translations {
   mute: string
   unmute: string
   rotatePhone: string
+  forceRotatePhone: string
 
   // Wine Monkey Scene (250-300m)
   wineMonkeyTitle: string
@@ -57,9 +58,10 @@ export const translations: Record<Language, Translations> = {
     restart: "Tap to Restart",
     tryAgain: "Try Again",
     results: "🎉 Results 🎉",
+    rotatePhone: "Turn your phone sideways to play!",
+    forceRotatePhone: "Please turn your phone sideways to play.",
     mute: "🔇",
     unmute: "🔊",
-    rotatePhone: "Turn your phone sideways to play!",
 
     // Wine Monkey Scene (250-300m)
     wineMonkeyTitle: "Art Critic Monkey",
@@ -128,9 +130,10 @@ export const translations: Record<Language, Translations> = {
     restart: "タップしてリスタート",
     tryAgain: "再挑戦",
     results: "🎉 結果 🎉",
+    rotatePhone: "スマホを横にしてね！",
+    forceRotatePhone: "スマホを横にしてプレイしてください。",
     mute: "🔇",
     unmute: "🔊",
-    rotatePhone: "スマホを横にしてね！",
 
     // Wine Monkey Scene (250-300m)
     wineMonkeyTitle: "芸術評論家モンキー",
