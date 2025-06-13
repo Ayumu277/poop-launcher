@@ -1,14 +1,10 @@
-
-https://github.com/user-attachments/assets/fd0af5e8-13c2-4ded-8600-1929d04b6474
-
-https://github.com/user-attachments/assets/fd0af5e8-13c2-4ded-8600-1929d04b6474
 # 💩 Poop Launcher
 
 A hilariously unnecessary yet oddly satisfying timing game.  
 Sync two trembling poops and fling one across a grassy field while a sarcastic monkey critiques your form.
 
 
-https://github.com/user-attachments/assets/c81b7b37-1903-45b5-b203-c98af325cadb
+https://github.com/user-attachments/assets/fd0af5e8-13c2-4ded-8600-1929d04b6474
 
 ---
 
