@@ -46,14 +46,6 @@ absorbing your poop mid-air and delivering elegant, sarcastic commentary.
 
 ---
 
-## 🎥 Demo
-
-[![Watch Demo](https://img.youtube.com/vi/YOUTUBE_VIDEO_ID/hqdefault.jpg)](https://youtu.be/YOUTUBE_VIDEO_ID)
-
-> 🔄 Replace `YOUTUBE_VIDEO_ID` with your actual YouTube ID.
-
----
-
 ## ✨ Features
 
 - 🎼 Classical music BGM (Bach or beyond)
