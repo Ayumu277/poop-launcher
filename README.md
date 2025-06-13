@@ -13,6 +13,36 @@ Sync two trembling poops and fling one across a grassy field while a sarcastic m
 - Launch the poop at just the right moment
 - Fly as far as possible
 - If you fall short, a wine-bottle-holding monkey will judge your performance... artistically.
+- 🎯 Goal: Reach 800m – the monkey may change his tone...
+
+---
+
+## 🐒 Monkey Performance
+
+At 150m, 250m, and 300m, mocking monkeys will appear holding wine bottles,  
+absorbing your poop mid-air and delivering elegant, sarcastic commentary.
+
+> "_This is not mere feces... it’s a postmodern failure._"  
+> "_Art, but uninspired._"
+
+---
+
+## 🎨 Concept
+
+- 💩 Poop as performance art
+- 🌌 A visually infinite, high-class landscape
+- 🐵 Monkeys as social critics
+- 🎻 Classical music turns absurdity into poetry
+
+> _A poop-flinging game with the soul of a gallery installation._
+
+---
+
+## 🎥 Demo
+
+[![Watch Demo](https://img.youtube.com/vi/YOUTUBE_VIDEO_ID/hqdefault.jpg)](https://youtu.be/YOUTUBE_VIDEO_ID)
+
+> 👆 Replace `YOUTUBE_VIDEO_ID` with your actual ID after uploading.
 
 ---
 
