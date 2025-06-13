@@ -1167,35 +1167,33 @@ export default function Home() {
     }
 
     const handleStartGame = async () => {
-    // On mobile, try to lock orientation to landscape
-    if (isMobile) {
+    // On mobile, if in portrait mode, do not start the game.
+    // Instead, attempt to lock orientation and wait for the user to try again.
+    if (isMobile && isPortrait) {
       try {
         if (document.documentElement.requestFullscreen) {
-          await document.documentElement.requestFullscreen();
+          await document.documentElement.requestFullscreen().catch(console.error);
         }
         const orientation = screen.orientation as ScreenOrientationWithLock;
         if (orientation && orientation.lock) {
-          await orientation.lock('landscape');
+          await orientation.lock('landscape').catch(console.error);
         }
       } catch (err) {
-        console.error(`Failed to lock orientation: ${err}`);
+        console.error(`Could not lock orientation: ${err}`);
       }
+      // IMPORTANT: Do not start the game yet. User needs to be in landscape.
+      return;
     }
 
-    // Start audio on first interaction
+    // If orientation is correct, proceed to start the game.
     initializeAudio();
-
-    // Start the game
     resetPoopSpeeds();
     scrollOffsetRef.current = 0;
     setGameState('playing');
   }
 
     const handleCanvasClick = (event: MouseEvent | TouchEvent) => {
-      // Initialize audio on first interaction
-      if (!audioInitialized) {
-        initializeAudio()
-      }
+      // Audio is now initialized in handleStartGame to ensure it's a direct user action
 
       if (gameState === 'ready') {
         const canvas = canvasRef.current
@@ -1297,10 +1295,7 @@ export default function Home() {
   }, [gameState, language, isMuted, isMobile, isPortrait])
 
   const handleReset = () => {
-    // Initialize audio on button click too (but don't restart if already playing)
-    if (!audioInitialized) {
-      initializeAudio()
-    }
+    // Audio will be re-initialized on next game start if needed.
     // Keep BGM playing continuously - no restart needed
 
     // Reset scroll offset to prevent screen shifting
